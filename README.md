@@ -1,4 +1,5 @@
 > JPGChat writeup | Tuesday 29th December
+
 > https://tryhackme.com/jr/jpgchat
 
 # Recon / Enum
@@ -6,6 +7,7 @@
 ---------------
 
 Starting of with a classic nmap scan will reveal that there are 2 ports open.
+
 Specifically port 22 and 3000.
 
 `nmap -sC -sV -p- -v 10.10.166.220`
@@ -26,6 +28,7 @@ Specifically port 22 and 3000.
 ```
 
 Now 22 is just ssh, but 3000 is "JPChat"?
+
 Now we can see that the source code for the application is at the admins github.
 
 Lets try to connct to the application to check if we can find the source code.
@@ -49,6 +52,7 @@ There are currently 0 other users logged in
 As we can see, there are currently no users logged in.
 
 After poking around at this `[MESSAGE]` form, there appears to be nothing useful.
+
 But we should check out the `[REPORT]` form aswell.
 
 ```
@@ -58,11 +62,13 @@ your name:
 ```
 
 As we can see, the report will be read by Mozzie-jpg!
+
 That must be the admins alias, lets check github for him!
 
 # Enumerating the application
 
 After visiting the admins github, i have found the source code.
+
 Here is the source code
 
 ```python
@@ -115,6 +121,7 @@ The echo command, well echoes something to the terminal or it can be redirected 
 ### BUT, in this situasion it isn't properly handled!!!
 
 The echo command should be surrounded by quotes, especially if it is going to be passed user input.
+
 This can be exploited with a simple `;`, as it isn't surrounded by quotes, we should be able to run an extra command.
 
 We can test this locally before firing it at the target. (AS YOU SHOULD)
@@ -125,6 +132,7 @@ test
 ➜  writeup: 
 ```
 Now this only returns "test", why is that?
+
 Lets try to cat out the file, just to see whats in it.
 
 ```
