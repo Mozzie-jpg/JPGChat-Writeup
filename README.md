@@ -212,11 +212,7 @@ So it imports a module named `compare`, now we can modify the PYTHONPATH variabl
 
 And we can then write our own malicious compare.py file, which in my case i wrote this into it
 
-```python
-import os
-
-os.system("chmod +s /bin/bash")
-```
+<img src="privesc.png">
 
 if you write that into say /dev/shm/compare.py
 and have set your PYTHONPATH variable to /dev/shm, this command should execute as root.
